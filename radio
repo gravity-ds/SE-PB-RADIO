@@ -1,0 +1,106 @@
+string frequency = "30";
+string channel = "1";
+string call = "MyCall";
+  g
+IMyRadioAntenna antenna = null;
+IMyTextPanel panel = null;
+IMyTextPanel panelMsg = null;
+
+public Program()
+{
+	Runtime.UpdateFrequency = UpdateFrequency.Update100;
+	Echo("Antenna...");
+	List<IMyTerminalBlock> list = new List<IMyTerminalBlock>();
+	GridTerminalSystem.GetBlocksOfType<IMyRadioAntenna>(list);
+	if (list.Count > 0)
+	{
+		antenna = list[0] as IMyRadioAntenna;
+		antenna.SetValue("PBList", Me.EntityId);
+		antenna.SetValue("IgnoreAlliedBroadcast", false);
+		antenna.SetValue("IgnoreOtherBroadcast", false);
+	}
+	else
+	{
+		Echo("ERROR: Antenna missing!");
+	}
+	panel = GridTerminalSystem.GetBlockWithName("RadioLCD") as IMyTextPanel;
+	panelMsg = GridTerminalSystem.GetBlockWithName("RadioMSG") as IMyTextPanel;
+	if(panel == null){
+		Echo("ERROR: Requires LCD named RadioLCD");
+	}
+
+	else if(panelMsg == null){
+		Echo("ERROR: Requires LCD named RadioLCD");
+	}
+	Echo("Ready!");
+	panel.WritePublicText("Система онлайн\nЧастота "+frequency+"Mhz\nКанал "+channel+"\n", false);
+	panel.ShowPublicTextOnScreen();
+}
+
+public void Main(string argument)
+{
+	if(argument != null){
+		var parts = argument.Split(new char[] { ' ' }, 2);
+		if(parts[0] == "msg" || parts[0] == "rs"){
+			Transmitter(argument);
+			}else if(parts[0] == "TX"){
+				Receiver(argument);
+			}
+			string textMSG = panelMsg.GetPublicText();
+			if(textMSG != " "){
+				Transmitter("msg "+textMSG);
+			}
+		}
+		Echo(argument);
+	}
+	public void Transmitter(string argument)  //Перадатчик TX
+	{
+		var parts = argument.Split(new char[] { ' ' }, 2);
+		string message = "TX ;"+frequency+";"+channel+";"+call+";"+parts[0]+";"+parts[1];
+		antenna.TransmitMessage(message, MyTransmitTarget.Everyone);
+		if(parts[0] == "msg"){
+			panel.WritePublicText("<-"+parts[1]+"\n", true);
+			panelMsg.WritePublicText(" ", false);
+			panelMsg.ShowPublicTextOnScreen();
+		}
+		else if(parts[0] == "rs"){
+			panel.WritePublicText("<-Запуск: "+parts[1]+"\n", true);
+		}
+		panel.ShowPublicTextOnScreen();
+	}
+	public void Receiver(string argument) //Приемник RX
+	{
+		var argumentsplit = argument.Split(new char[] { ';' }, 6);
+		if (argumentsplit[0] == "TX ")
+		{
+			if (argumentsplit[1] == frequency)
+			{
+				if (argumentsplit[2] == channel)
+				{
+					if (argumentsplit[4] == "msg")
+					{
+						panel.WritePublicText("-> "+argumentsplit[3]+":"+argumentsplit[5]+"\n", true);
+						panel.ShowPublicTextOnScreen();
+					}
+					else if (argumentsplit[4] == "rs"){
+
+						IMyTimerBlock timer = GridTerminalSystem.GetBlockWithName(argumentsplit[5]) as IMyTimerBlock;
+						if(timer != null){
+							timer.ApplyAction("Start");
+							string message = "msg Запущен протокол: " +argumentsplit[5];
+							Transmitter(message);
+						}
+
+					}
+				}
+			}
+			else
+			{
+				Echo("escortgroup doesn't match, ignoring");
+			}
+		}
+		else
+		{
+			Echo("Message not intended for this script. Ignoring it and continuing.");
+		}
+	}
